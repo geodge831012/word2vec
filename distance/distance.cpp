@@ -13,12 +13,15 @@
 //  limitations under the License.
 
 #include <iostream>
+#include <fstream>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include <malloc.h>
 #include <map>
+#include <algorithm>
 #include <vector>
+#include "Common.h"
 
 using namespace std;
 
@@ -27,6 +30,30 @@ const long long N = 40;                  // number of closest words that will be
 const long long max_w = 50;              // max length of vocabulary entries
 
 map<string, vector<float> > mpWordVtDimension;
+
+typedef struct Node
+{
+    Node()
+    {
+        _sWord   = "";
+        _fCosDis = 0.0;
+    }
+
+    string          _sWord;
+    float           _fCosDis;
+    vector<float>   _vtDim;
+
+/*    bool operator < (const Node &s) const
+    {   
+        return _fCosDis < s._fCosDis;
+    }*/
+}Node;
+
+bool greater_val(const Node & s1, const Node & s2)
+{
+    return s1._fCosDis > s2._fCosDis;
+}
+
 
 int calcCosDis(const vector<float> &vtDimen1, const vector<float> &vtDimen2, float &fCosDis)
 {
@@ -48,6 +75,25 @@ int calcCosDis(const vector<float> &vtDimen1, const vector<float> &vtDimen2, flo
     }
     float fFenmu = pow(fFenmu1, 0.5) * pow(fFenmu2, 0.5);
     fCosDis = fFenzi/fFenmu;
+
+    return 0;
+}
+
+int calcEuclidDis(const vector<float> &vtDimen1, const vector<float> &vtDimen2, float &fEuclidDis)
+{
+    if(vtDimen1.size() != vtDimen2.size())
+    {
+        cout << "Euclid, dimension is not equal, vtDimen1.size:" << vtDimen1.size() << ", vtDimen2.size:" << vtDimen2.size() << endl;
+        fEuclidDis = 99999.9;
+        return -1;
+    }
+
+    float fSum = 0.0;
+    for(size_t i=0; i<vtDimen1.size(); i++)
+    {
+        fSum += pow(vtDimen1[i]-vtDimen2[i], 2);
+    }
+    fEuclidDis = pow(fSum, 0.5);
 
     return 0;
 }
@@ -162,6 +208,257 @@ int calcVal1(const vector<string> &vtSen1, const vector<string> &vtSen2, float &
     return 0;
 }
 
+int calcVal2(const vector<string> &vtSen1, const vector<string> &vtSen2, float &fDis)
+{
+    int iFlag = 0;
+    vector<float> vtSum1;
+    for(size_t i=0; i<vtSen1.size(); i++)
+    {
+        if(mpWordVtDimension.find(vtSen1[i]) == mpWordVtDimension.end())
+        {//not find
+            cout << "not find, 1 word:" << vtSen1[i] << endl;
+            continue;
+        }
+        vector<float> vtDimen1 = mpWordVtDimension[vtSen1[i]];
+        if(0==iFlag)
+        {
+            vtSum1 = vtDimen1;
+            iFlag = 1;
+        }
+        else
+        {
+            for(size_t j=0; j<vtDimen1.size(); j++)
+            {
+                vtSum1[j] += vtDimen1[j];
+            }
+        }
+    }
+    for(size_t i=0; i<vtSum1.size(); i++)
+    {
+        vtSum1[i] = vtSum1[i] / (float)vtSen1.size();
+    }
+
+    iFlag = 0;
+    vector<float> vtSum2;
+    for(size_t i=0; i<vtSen2.size(); i++)
+    {
+        if(mpWordVtDimension.find(vtSen2[i]) == mpWordVtDimension.end())
+        {//not find
+            cout << "not find, 2 word:" << vtSen2[i] << endl;
+            continue;
+        }
+        vector<float> vtDimen2 = mpWordVtDimension[vtSen2[i]];
+        if(0==iFlag)
+        {
+            vtSum2 = vtDimen2;
+            iFlag = 1;
+        }
+        else
+        {
+            for(size_t j=0; j<vtDimen2.size(); j++)
+            {
+                vtSum2[j] += vtDimen2[j];
+            }
+        }
+    }
+    for(size_t i=0; i<vtSum2.size(); i++)
+    {
+        vtSum2[i] = vtSum2[i] / (float)vtSen2.size();
+    }
+
+    //calc
+    int iRet = calcEuclidDis(vtSum1, vtSum2, fDis);
+    if(iRet < 0)
+    {
+        cout << "calcCosDis iRet:" << iRet << endl;
+        return -1;
+    }
+
+    return 0;
+}
+
+int test1()
+{
+    string sWord = "市盈率";
+
+    while(1)
+    {
+        if(sWord.empty())
+        {
+            continue;
+        }
+
+        map<string, vector<float> >::iterator it = mpWordVtDimension.find(sWord);
+        if(it == mpWordVtDimension.end())
+        {//not find
+            cout << "sWord:" << sWord << " is not in mpWordVtDimension" << endl;
+            continue;
+        }
+
+        vector<float> vtWord1Dim = it->second;
+
+        vector<Node> vtNode;
+
+        for(it=mpWordVtDimension.begin(); it!=mpWordVtDimension.end(); it++)
+        {
+            Node node;
+            node._sWord = it->first;
+            node._vtDim = it->second;
+
+            calcCosDis(vtWord1Dim, it->second, node._fCosDis);
+
+            vtNode.push_back(node);
+        }
+
+        sort(vtNode.begin(), vtNode.end(), greater_val);
+
+        if(vtNode.size() < 50)
+        {
+            cout << "<50" << endl;
+        }
+
+        for(size_t i=0; i<vtNode.size() && i<60; i++)
+        {
+            cout << "word:" << vtNode[i]._sWord << ", dis:" << vtNode[i]._fCosDis << endl;
+            for(size_t j=0; j<vtNode[i]._vtDim.size(); j++)
+            {
+                cout << vtNode[i]._vtDim[j] << " ";
+            }
+            cout << endl;
+        }
+
+        break;
+    }
+
+    return 0;
+}
+
+int test2()
+{
+    string sRs = "";
+    vector<float> vtWord1Dim;
+    ifstream f;
+    f.open("rs", ios::in);
+    while(f >> sRs)
+    {
+        cout << "sRs:" << sRs << endl;
+        vtWord1Dim = TC_Common::sepstr<float>(sRs, ",");
+        cout << "vtWord1Dim.size():" << vtWord1Dim.size() << endl;
+        break;
+    }
+    f.close();
+
+
+    string sWord;
+    vector<Node> vtNode;
+    ifstream myifstream;
+
+    myifstream.open("word2", ios::in);
+    while(myifstream >> sWord)
+    {
+        if(sWord.empty())
+        {
+            continue;
+        }
+
+        map<string, vector<float> >::iterator it = mpWordVtDimension.find(sWord);
+        if(it == mpWordVtDimension.end())
+        {//not find
+            cout << "sWord:" << sWord << " is not in mpWordVtDimension" << endl;
+            continue;
+        }
+
+        Node node;
+        node._sWord = it->first;
+        node._vtDim = it->second;
+
+        calcCosDis(vtWord1Dim, it->second, node._fCosDis);
+
+        vtNode.push_back(node);
+    }
+    myifstream.close();
+
+    sort(vtNode.begin(), vtNode.end(), greater_val);
+
+    for(size_t i=0; i<vtNode.size(); i++)
+    {
+        cout << "word:" << vtNode[i]._sWord << ", dis:" << vtNode[i]._fCosDis << endl;
+    }
+
+    return 0;
+}
+
+
+int test3_input_regular(const string &sInput)
+{
+    //计算距离
+
+    //输入解析
+    vector<string> vtSenInput = TC_Common::sepstr<string>(sInput, "|");
+//    cout << "sInput:" << sInput << ", vtSenInput.size:" << vtSenInput.size() << endl;
+  //  cout << "----------------------------------------------" << endl;;
+
+    //读入规则
+    string sLine("");
+    ifstream f;
+    f.open("invest3.regular", ios::in);
+    while(f >> sLine)
+    {
+        if(sLine.empty())
+        {
+            continue;
+        }
+
+        vector<string> vtSenRegular = TC_Common::sepstr<string>(sLine, "|");
+
+        float fDis = 0.0;
+        int iRet = calcVal1(vtSenInput, vtSenRegular, fDis);
+        //cout << "sLine:" << sLine << ", vtSenRegular.size:" << vtSenRegular.size() << endl;
+        //cout << "iRet:" << iRet << ", fDis:" << fDis << endl;
+        cout << sLine << "" << vtSenRegular.size() << "" << iRet << "" << fDis << endl;
+        //cout << "----------------------------------------------" << endl;;
+    }
+    f.close();
+
+
+    return 0;
+}
+    
+int test4_input_regular_euclid(const string &sInput)
+{
+    //计算距离
+
+    //输入解析
+    vector<string> vtSenInput = TC_Common::sepstr<string>(sInput, "|");
+//    cout << "sInput:" << sInput << ", vtSenInput.size:" << vtSenInput.size() << endl;
+  //  cout << "----------------------------------------------" << endl;;
+
+    //读入规则
+    string sLine("");
+    ifstream f;
+    f.open("invest3.regular", ios::in);
+    while(f >> sLine)
+    {
+        if(sLine.empty())
+        {
+            continue;
+        }
+
+        vector<string> vtSenRegular = TC_Common::sepstr<string>(sLine, "|");
+
+        float fDis = 0.0;
+        int iRet = calcVal2(vtSenInput, vtSenRegular, fDis);
+        //cout << "sLine:" << sLine << ", vtSenRegular.size:" << vtSenRegular.size() << endl;
+        //cout << "iRet:" << iRet << ", fDis:" << fDis << endl;
+        cout << sLine << "" << vtSenRegular.size() << "" << iRet << "" << fDis << endl;
+        //cout << "----------------------------------------------" << endl;;
+    }
+    f.close();
+
+
+    return 0;
+}
+
 
 int main(int argc, char **argv) {
   FILE *f;
@@ -208,7 +505,7 @@ int main(int argc, char **argv) {
   ///////////////////////////////////////////////////////////////
 //  printf("words:%d\n", words);
 //  printf("size :%d\n", size);
-  printf("----------------------------------------------\n");
+//  printf("----------------------------------------------\n");
 
 ////////////////////////////////////////////////////////////////////
 
@@ -229,8 +526,8 @@ int main(int argc, char **argv) {
         mpWordVtDimension[sWord] = vtDimension;
     }
 
-/*    cout << "----------------------------------------------" << endl;;
-    for(map<string, vector<float> >::iterator it=mpWordVtDimension.begin(); it!=mpWordVtDimension.end(); it++)
+//    cout << "----------------------------------------------" << endl;;
+/*    for(map<string, vector<float> >::iterator it=mpWordVtDimension.begin(); it!=mpWordVtDimension.end(); it++)
     {
         cout << it->first << endl;
         for(size_t i=0; i<it->second.size(); i++)
@@ -238,42 +535,80 @@ int main(int argc, char **argv) {
             cout << it->second[i] << ", ";
         }
         cout << endl;
-    }
+    }*/
+/*    for(map<string, vector<float> >::iterator it=mpWordVtDimension.begin(); it!=mpWordVtDimension.end(); it++)
+    {
+        float fSum = 0.0;
+        cout << it->first << endl;
+        for(size_t i=0; i<it->second.size(); i++)
+        {
+            fSum += pow(it->second[i], 2);
+        }
+        cout << pow(fSum, 0.5) << endl;
+        cout << endl;
+    }*/
+
+////////////////////////////////////////////////////////////////////////////
+
+//    test1();
+//    test2();
+//    test3_input_regular(argv[2]);
+    test4_input_regular_euclid(argv[2]);
+
+/*    string sWord;
+    ifstream myifstream;
+
+    myifstream.open("word2", ios::in);
+    while(myifstream >> sWord)
+    {
+        if(sWord.empty())
+        {
+            continue;
+        }
+
+        map<string, vector<float> >::iterator it = mpWordVtDimension.find(sWord);
+        if(it == mpWordVtDimension.end())
+        {//not find
+            cout << "sWord:" << sWord << " is not in mpWordVtDimension" << endl;
+            continue;
+        }
+
+        vector<float> vtWord1Dim = it->second;
+
+        vector<Node> vtNode;
+
+        for(it=mpWordVtDimension.begin(); it!=mpWordVtDimension.end(); it++)
+        {
+            Node node;
+            node._sWord = it->first;
+            node._vtDim = it->second;
+
+            calcCosDis(vtWord1Dim, it->second, node._fCosDis);
+
+            vtNode.push_back(node);
+        }
+
+        sort(vtNode.begin(), vtNode.end(), greater_val);
+
+        if(vtNode.size() < 50)
+        {
+            cout << "<50" << endl;
+        }*/
+/*
+        for(size_t i=0; i<vtNode.size() && i<50; i++)
+        {
+            //cout << "word:" << vtNode[i]._sWord << ", dis:" << vtNode[i]._fCosDis << endl;
+            for(size_t j=0; j<vtNode[i]._vtDim.size(); j++)
+            {
+                cout << vtNode[i]._vtDim[j] << " ";
+            }
+            cout << endl;
+        }
 */
-    
-    float fDis = 0.0;
-    vector<string> vtSen1;
-    vector<string> vtSen2;
-    vector<string> vtSen3;
-    vector<string> vtSen4;
-    vector<string> vtSen5;
-    vector<string> vtSen6;
+//    }
+  //  myifstream.close();
 
-    vtSen1.push_back("市盈率");
-    vtSen1.push_back("大于");
-
-    vtSen2.push_back("市净率");
-    vtSen2.push_back("小于");
-
-    vtSen3.push_back("市值");
-    vtSen3.push_back("较大");
-    vtSen3.push_back("股票");
-
-    vtSen4.push_back("市盈率");
-    vtSen4.push_back("大于");
-
-    vtSen5.push_back("市值");
-    vtSen5.push_back("最大");
-//    vtSen5.push_back("股票");
-
-    vtSen6.push_back("市值");
-    vtSen6.push_back("大于");
 
 /////////////////////////////////////////////////////////////////
-    int iRet = calcVal1(vtSen1, vtSen1, fDis);
-    cout << "iRet:" << iRet << ", fDis:" << fDis << endl;
-    cout << "----------------------------------------------" << endl;;
-
-/////////////////////////////////////////////////////////////////
-  return 0;
+    return 0;
 }
